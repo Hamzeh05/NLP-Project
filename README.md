@@ -6,12 +6,14 @@ An abstractive Arabic text summarization system built using a Seq2Seq architectu
 
 ## Project Structure
 
+```
 NLP-Project/
 │
 ├── Phase 1 (Data loading & Data Preprocessing).ipynb
 ├── Phase 2 (Model Design, Training & Evaluation).ipynb
 ├── requirements.txt
 └── README.md
+```
 
 ---
 
