@@ -1,0 +1,12 @@
+*.pt
+*.pkl
+*.h5
+*.csv
+*.jsonl
+*.parquet
+*.txt
+*.xz
+__pycache__/
+.ipynb_checkpoints/
+arasum_extracted/
+kaggle_extracted/
