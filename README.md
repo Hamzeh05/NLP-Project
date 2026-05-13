@@ -1,5 +1,7 @@
 # Arabic Text Summarization — NLP Project
 
+Due to large file sizes, the following link has the datasets and the trained model:https://drive.google.com/drive/folders/1TKbwl5Qh9iNWqeF6Y1LayBx5LzRALXiq?usp=sharing
+
 An abstractive Arabic text summarization system built using a Seq2Seq architecture with Bahdanau Attention, implemented in PyTorch, complete with a locally deployable Streamlit web interface.
 
 ---
@@ -231,12 +233,12 @@ to predict the next token in the vocabulary.
 
 | Metric | Score |
 |---|---|
-| ROUGE-1 | Insert S |
-| ROUGE-2 | Insert Score |
-| ROUGE-L | Insert Score |
-| BERTScore Precision | 0.3911 |
-| BERTScore Recall | 0.2959 |
-| BERTScore F1 | 0.3345 |
+| ROUGE-1 | 0.1856|
+| ROUGE-2 | 0.0927 |
+| ROUGE-L | 0.1495 |
+| BERTScore Precision | 0.4482 |
+| BERTScore Recall |0.4741 |
+| BERTScore F1 | 0.4587 |
 
 ---
 
