@@ -1,26 +1,31 @@
 # Arabic Text Summarization — NLP Project
 
-An abstractive Arabic text summarization system built using a Seq2Seq architecture with Bahdanau attention, implemented in PyTorch.
+An abstractive Arabic text summarization system built using a Seq2Seq architecture with Bahdanau Attention, implemented in PyTorch, complete with a locally deployable Streamlit web interface.
 
 ---
 
-## Project Structure
+# Project Structure
 
-```
+```text
 NLP-Project/
 │
 ├── Phase 1 (Data loading & Data Preprocessing).ipynb
 ├── Phase 2 (Model Design, Training & Evaluation).ipynb
+├── app.py                      # Streamlit Web UI for model inference
+├── checkpoint.pt               # Trained PyTorch model weights
+├── tokenizer.pkl               # Saved tokenizer vocabulary
+├── NLP_Project_Report.pdf      # Detailed project documentation and findings
 ├── requirements.txt
 └── README.md
 ```
 
 ---
 
-## Phase 1 — Data Loading & Preprocessing
+# Phase 1 — Data Loading & Preprocessing
 
-### Data Aggregation & Filtering
-We merged four distinct Arabic datasets into a single master dataframe. Duplicate entries were dropped and null rows were removed to ensure a high-quality baseline.
+## Data Aggregation & Filtering
+
+We merged four distinct Arabic datasets into a single master dataframe. Duplicate entries were removed and null rows were dropped to ensure a clean and high-quality dataset.
 
 | Dataset | Source | Rows |
 |---|---|---|
@@ -29,119 +34,340 @@ We merged four distinct Arabic datasets into a single master dataframe. Duplicat
 | Egyptian | HuggingFace | ~3,689 |
 | Kaggle | Kaggle | ~8,055 |
 
-### Exploratory Data Analysis (EDA)
-EDA drove all preprocessing decisions:
-- **Distribution Analysis** — plotted word counts for documents and summaries
-- **Anomaly Detection** — identified and removed summaries longer than their source documents (ratio > 1.0)
-- **Threshold Setting** — 75% of documents are under 425 words → set `MAX_ENC_LEN = 400`; summaries are consistently 30–36 words → set `MAX_DEC_LEN = 50`
+---
 
-### Text Cleaning & Normalization
-The `clean_arabic` function standardizes raw Arabic text:
-- Removes URLs, HTML noise, and English characters
-- Strips diacritics (Tashkeel)
-- Normalizes character variants (e.g., إأآا → ا, ى → ي, ة → ه)
+## Exploratory Data Analysis (EDA)
 
-### Tokenization & Padding
-- A single shared tokenizer is fitted on training documents and summaries (`VOCAB_SIZE = 60,000`)
-- Sequences are converted to integer IDs and post-padded to uniform lengths
-- Encoder inputs padded to shape `(N, 400)`, decoder inputs to `(N, 50)`
-- Start token `sostok` and end token `eostok` are added to all summaries
+EDA was used to guide all preprocessing decisions.
+
+### Performed Analysis
+
+- Distribution analysis for document and summary lengths
+- Anomaly detection for invalid summary/document ratios
+- Threshold selection for sequence truncation and padding
+
+### Final Sequence Lengths
+
+```python
+MAX_ENC_LEN = 400
+MAX_DEC_LEN = 50
+```
+
+Documents are padded/truncated to 400 tokens, while summaries are padded/truncated to 50 tokens.
 
 ---
 
-## Phase 2 — Model Design, Training & Evaluation
+## Text Cleaning & Normalization
 
-### Architecture
-A Seq2Seq model with three core components:
+The `clean_arabic()` function standardizes Arabic text through multiple preprocessing stages:
 
-**Encoder — 2-layer Bidirectional LSTM**
-Reads the input document in both directions. Forward and backward hidden states are concatenated to form a unified context representation of shape `(batch, 1024)`.
+### Cleaning Operations
 
-**Bahdanau Attention**
-At each decoding step, computes a weighted sum over all encoder outputs — allowing the decoder to focus on the most relevant parts of the source document rather than relying solely on the final encoder state.
+- Remove URLs
+- Remove HTML tags and noise
+- Remove English characters
+- Remove punctuation
+- Remove Arabic diacritics (Tashkeel)
 
-**Decoder — Unidirectional LSTM**
-Generates the summary one token at a time. Receives the previous token, current hidden state, and attention context vector as input. Hidden dimension is `1024` (LATENT_DIM × 2) to match encoder states.
+### Character Normalization
 
-**Shared Embedding**
-A single embedding table is shared across encoder and decoder. Since both source and target are Arabic, this ensures identical words have identical representations on both sides, improving attention alignment.
+```text
+إ أ آ ا  →  ا
+ى        →  ي
+ة        →  ه
+```
 
-### Training
+---
+
+## Tokenization & Padding
+
+- A shared tokenizer is trained on both documents and summaries
+- Vocabulary size is limited to:
+
+```python
+VOCAB_SIZE = 40000
+```
+
+- Sequences are converted into integer token IDs
+- Post-padding is applied for fixed-length tensors
+- Target summaries include:
+  - `sostok`
+  - `eostok`
+
+---
+
+# Phase 2 — Model Design, Training & Evaluation
+
+## Model Architecture
+
+The system uses a Seq2Seq architecture with Bahdanau Attention implemented entirely in PyTorch.
+
+### Core Dimensions
+
+```python
+LATENT_DIM = 256
+EMBEDDING_DIM = 300
+VOCAB_SIZE = 40000
+```
+
+---
+
+## 1. Shared Embedding Layer
+
+A single embedding matrix is shared between the encoder and decoder.
+
+### Embedding Shape
+
+```python
+40000 × 300
+```
+
+This ensures that identical Arabic words share the same semantic representation on both sides of the Seq2Seq pipeline.
+
+---
+
+## 2. Encoder — Bidirectional LSTM
+
+### Encoder Configuration
+
+- 2-layer Bidirectional LSTM
+- Input size: `300`
+- Hidden size: `256` per direction
+- Dropout: `0.3`
+
+### Output Representation
+
+Forward and backward hidden states are concatenated:
+
+```python
+256 + 256 = 512
+```
+
+This produces a contextual encoder representation of size `512`.
+
+---
+
+## 3. Bahdanau Attention Mechanism
+
+At each decoding timestep, Bahdanau Attention computes alignment scores between:
+
+- Current decoder hidden state
+- All encoder outputs
+
+### Attention Components
+
+```python
+W1
+W2
+V
+```
+
+The resulting weighted context vector allows the decoder to focus dynamically on the most relevant parts of the input document.
+
+Context vector size:
+
+```python
+512
+```
+
+---
+
+## 4. Decoder — Unidirectional LSTM
+
+### Decoder Input
+
+The decoder input consists of:
+
+```python
+300  → Embedded previous token
+512  → Attention context vector
+```
+
+Combined input size:
+
+```python
+812
+```
+
+### Decoder Configuration
+
+- Unidirectional LSTM
+- Hidden size: `512`
+
+### Output Classifier
+
+The decoder output is passed through two fully connected layers:
+
+```python
+1024 → 512 → 40000
+```
+
+with:
+
+- ReLU activation
+- Dropout (`0.3`)
+
+to predict the next token in the vocabulary.
+
+---
+
+# Training Configuration
+
 | Setting | Value |
 |---|---|
 | Optimizer | Adam |
 | Learning Rate | 3×10⁻⁴ |
-| Loss Function | CrossEntropyLoss (label smoothing 0.1) |
+| Loss Function | CrossEntropyLoss (label smoothing = 0.1) |
 | Gradient Clipping | 5.0 |
 | Batch Size | 64 |
 | Scheduler | OneCycleLR |
 | Early Stopping | Patience = 5 |
 | Mixed Precision | AMP (float16) |
-| Teacher Forcing | Yes |
-
-### Evaluation Results
-| Metric | Score |
-|---|---|
-| ROUGE-1 | — |
-| ROUGE-2 | — |
-| ROUGE-L | — |
-| BERTScore Precision | — |
-| BERTScore Recall | — |
-| BERTScore F1 | — |
-
-
+| Teacher Forcing | Enabled |
 
 ---
 
-## Setup & Usage
+# Evaluation Results
 
-### 1 — Install dependencies
+| Metric | Score |
+|---|---|
+| ROUGE-1 | Insert S |
+| ROUGE-2 | Insert Score |
+| ROUGE-L | Insert Score |
+| BERTScore Precision | 0.3911 |
+| BERTScore Recall | 0.2959 |
+| BERTScore F1 | 0.3345 |
+
+---
+
+# Interactive Web Interface (Streamlit)
+
+The repository includes a lightweight Streamlit interface (`app.py`) for real-time Arabic summarization.
+
+The interface loads:
+
+- `checkpoint.pt`
+- `tokenizer.pkl`
+
+and performs live abstractive summarization directly in the browser.
+
+---
+
+## Streamlit Features
+
+- Real-time Arabic text cleaning
+- Greedy decoding inference
+- Dynamic minimum-length penalty
+- Prevention of premature `<eostok>` generation
+- Fully local deployment
+
+---
+
+# Setup & Usage
+
+## 1. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2 — Download datasets
-See the dataset section below for download links. Upload all files to `/content/` in Google Colab.
+---
 
-### 3 — Run on Google Colab
-Open the notebooks in Google Colab with **Runtime → Change runtime type → T4 GPU**.
+## 2. Run the Web Interface
 
-Run Phase 1 first, then Phase 2.
+Ensure the following files exist in the same directory:
+
+```text
+checkpoint.pt
+tokenizer.pkl
+app.py
+```
+
+Then launch Streamlit:
+
+```bash
+streamlit run app.py
+```
+
+The application will automatically open in your default browser.
 
 ---
 
-## Datasets
+## 3. Retraining on Google Colab
+
+To retrain the model from scratch:
+
+1. Open the notebooks in Google Colab
+2. Enable GPU runtime:
+
+```text
+Runtime → Change runtime type → T4 GPU
+```
+
+3. Upload the datasets to `/content/`
+4. Run:
+   - Phase 1 notebook first
+   - Phase 2 notebook second
+
+---
+
+# Datasets
 
 | Dataset | Download |
 |---|---|
-| SumArabic | Run `downloader.py` (included in SumArabic zip) |
-| AraSum | [UFAL DSG GitHub](https://github.com/UFAL-DSG/sumarabic) |
-| Egyptian | [HuggingFace](https://huggingface.co/datasets/Omar-youssef/Egyptian-text-summarization) |
-| Kaggle | [Kaggle](https://www.kaggle.com/datasets/haithemhermessi/arabic-news-summarization) |
-
-Required files to upload to Colab:
-- `sumarabic-1.0-train.jsonl`
-- `sumarabic-1.0-test.jsonl`
-- `sumarabic-1.0-valid.jsonl`
-- `AraSum.txt`
-- `train-00000-of-00001.parquet`
-- `summarizdataset.csv`
+| SumArabic | Run `downloader.py` from the official zip |
+| AraSum | https://github.com/UFAL-DSG/sumarabic |
+| Egyptian | https://huggingface.co/datasets/Omar-youssef/Egyptian-text-summarization |
+| Kaggle | https://www.kaggle.com/datasets/haithemhermessi/arabic-news-summarization |
 
 ---
 
-## Requirements
-See `requirements.txt` for full dependency list.
+## Required Dataset Files
 
-Key dependencies:
-- `torch` — model training
-- `transformers` — BERTScore evaluation
-- `rouge-score` — ROUGE evaluation
-- `bert-score` — semantic evaluation
-- `tensorflow` — tokenizer (preprocessing only)
+```text
+sumarabic-1.0-train.jsonl
+sumarabic-1.0-test.jsonl
+sumarabic-1.0-valid.jsonl
+AraSum.txt
+train-00000-of-00001.parquet
+summarizdataset.csv
+```
 
 ---
 
-## Notes
-- TensorFlow is used only for the `Tokenizer` and `pad_sequences` in preprocessing. All model training runs on PyTorch with full GPU support.
-- Training on a Google Colab T4 GPU takes approximately 30–60 minutes depending on dataset size.
-- Checkpoints are saved automatically to `checkpoint.pt` whenever validation loss improves.
+# Requirements
+
+See `requirements.txt` for the complete dependency list.
+
+## Main Libraries
+
+| Library | Purpose |
+|---|---|
+| torch | Model training and inference |
+| streamlit | Web interface |
+| transformers | BERTScore evaluation |
+| bert-score | Semantic similarity evaluation |
+| rouge-score | ROUGE evaluation |
+| tensorflow | Tokenization and preprocessing |
+
+---
+
+# Notes
+
+- TensorFlow is used only for:
+  - `Tokenizer`
+  - `pad_sequences`
+
+- All model training and inference are implemented purely in PyTorch.
+
+- Training on a Google Colab T4 GPU typically takes:
+
+```text
+30–60 minutes
+```
+
+depending on dataset size.
+
+- Model checkpoints are automatically saved whenever validation loss improves.
+
+---
